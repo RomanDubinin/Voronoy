@@ -22,6 +22,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using CSPoint = System.Drawing.Point; // "Point" بسبب وجود تضارب في اسم النوع
 using System.Drawing;
 using System.Windows.Forms;
@@ -66,7 +67,17 @@ namespace Voronoi2
 			
 			voroObject = new Voronoi ( 0.1 );
 		}
-		
+
+		public List<PointF> GetThreePointsOnCircle(PointF point, float radius)
+		{
+			return new List<PointF>
+			{
+				new PointF(point.X + radius, point.Y),
+				new PointF(point.X - 0.5f*radius, point.Y + 0.866f),
+				new PointF(point.X - 0.5f*radius, point.Y - 0.866f)
+			};
+		}
+
 		void spreadPoints()
 		{
 			g.Clear ( Color.White );
@@ -76,11 +87,55 @@ namespace Voronoi2
 			Random rand = new Random ( seed );
 			
 			richTextBox1.Text += "\nSEED: " + seed;
-			
-			for ( int i = 0; i < siteCount; i++ )
+
+			for (float x = 0; x < bitmap.Width; x += 10)
 			{
-				sites.Add ( new PointF ( (float)(rand.NextDouble() * 512), (float)(rand.NextDouble() * 512) ) );
+				sites.Add(new PointF(x, 0));
+				sites.Add(new PointF(x, bitmap.Height));
 			}
+
+			for (float y = 0; y < bitmap.Height; y += 10)
+			{
+				sites.Add(new PointF(0, y));
+				sites.Add(new PointF(bitmap.Width, y));
+			}
+
+//			for (float x = 0; x < bitmap.Width; x += 20)
+//			{
+//				for (float y = 0; y < bitmap.Height; y += 20)
+//				{
+//					sites.Add(new PointF(x, y));
+//				}
+//			}
+
+			var pointA = new PointF(20, 20);
+			var pointB = new PointF(250, 140);
+
+			sites.AddRange(GetThreePointsOnCircle(pointA, 1));
+			sites.AddRange(GetThreePointsOnCircle(pointB, 1));
+
+			var rectangles = new List<Rectangle>();
+			rectangles.Add(new Rectangle(100, 100, 100, 100));
+			rectangles.Add(new Rectangle(100, 300, 100, 100));
+			rectangles.Add(new Rectangle(400, 260, 130, 280));
+
+
+			foreach (var rectangle in rectangles)
+			{
+				for (var x = rectangle.X; x < rectangle.X + rectangle.Width; x += 4)
+				{
+					sites.Add(new PointF(x, rectangle.Y));
+					sites.Add(new PointF(x, rectangle.Y + rectangle.Height));
+				}
+
+				for (var y = rectangle.Y; y < rectangle.Y + rectangle.Height; y += 4)
+				{
+					sites.Add(new PointF(rectangle.X, y));
+					sites.Add(new PointF(rectangle.X + rectangle.Width, y));
+				}
+			}
+
+			sites = sites.Distinct().ToList();
 			
 			// رسم المواقع
 			for (int i = 0; i < sites.Count; i++)
@@ -90,7 +145,30 @@ namespace Voronoi2
 			
 			List<GraphEdge> ge;
 			ge = MakeVoronoiGraph ( sites, bitmap.Width, bitmap.Height );
-			
+
+			var toDel = new List<GraphEdge>();
+			foreach (var graphEdge in ge)
+			{
+				foreach (var rectangle in rectangles)
+				{
+					if (graphEdge.x1 > rectangle.X && graphEdge.x1 < rectangle.X + rectangle.Width &&
+						graphEdge.y1 > rectangle.Y && graphEdge.y1 < rectangle.Y + rectangle.Height ||
+						graphEdge.x2 > rectangle.X && graphEdge.x2 < rectangle.X + rectangle.Width &&
+						graphEdge.y2 > rectangle.Y && graphEdge.y2 < rectangle.Y + rectangle.Height ||
+						graphEdge.x1 <= 0 || graphEdge.x1 >= bitmap.Width ||
+						graphEdge.y1 <= 0 || graphEdge.y1 >= bitmap.Height ||
+						graphEdge.x2 <= 0 || graphEdge.x2 >= bitmap.Width ||
+						graphEdge.y2 <= 0 || graphEdge.y2 >= bitmap.Height)
+					{
+						toDel.Add(graphEdge);
+					}
+				}
+			}
+			foreach (var graphEdge in toDel)
+			{
+				ge.Remove(graphEdge);
+			}
+
 			// رسم أضلاع فورونوي
 			for ( int i = 0; i < ge.Count; i++ )
 			{
